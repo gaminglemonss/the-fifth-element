@@ -41,24 +41,45 @@ noStroke();
 let PJSCodeInjector, Reflect = sq.constructor("return Reflect")();PJSCodeInjector.applyInstance = function (o) {return function () {return Reflect.construct(o, arguments);};};
 
 // VARIABLES \\
+let loadLevel;
+
 let scene = 'load';
 
 let curLoad = 0;
 let level = 0;
 
 let loading = true;
+let dev = false;
 
 let blocks = [];
 let enemies = [];
 const levels = [
     {
         map: [
-            "",
-            "",
-            "",
-            "",
-            "@    ggg",
-            "ggggggggggggg",
+            "                                  ",
+            "                                  ",
+            "                 _____    __________",
+            "@               ______    __________",
+            "_________   __________    __________",
+            "_________   __________    __________",
+            "_________   __________    __________",
+            "_________   __________    __________",
+            "_________   __________    __________",
+            "____________________________________",
+            "____________________________________",
+            "____________________________________",
+            "____________________________________",
+        ],
+        scene: "tutorial",
+    },
+    {
+        map: [
+            "                  ",
+            "                  ",
+            "                  ",
+            "                  ",
+            "@    ggg       ",
+            "gggggdddggggg",
             "ddddddddddddd",
             "ddddddddddddd",
         ],
@@ -97,6 +118,47 @@ function rectRect(a, b){
 // LOADING AND IMAGES \\
 /* Credit to ski @thelegendski for loading method */
 let imgs = {
+    tutorial_background: function(){
+        background(0, 0);
+        
+        pushStyle();
+            let xOff = 0;
+            for (let i = 0; i < width; i ++){
+                let yOff = 0;
+                for (let j = 0; j < height; j ++){
+                    const bright = map(noise(xOff, yOff), 0, 1, 150, 240);
+                    stroke(bright);
+                    strokeWeight(3);
+                    point(i*2, j*2);
+                    yOff += 0.01;
+                }
+                xOff += 0.01;
+            }
+        popStyle();
+        
+        return get(0, 0, 600, 600);
+    },
+    earth_background: function(){
+        background(0, 0);
+        
+        background(0, 138, 18);
+        
+        return get(0, 0, 600, 600);
+    },
+    water_background: function(){},
+    fire_background: function(){},
+    wind_background: function(){},
+    tutorial_player: function(){
+        background(0, 0, 0, 0);
+        
+        fill(224, 224, 224);
+        rect(0, 0, 80, 80, 10);
+        
+        fill(209, 209, 209);
+        rect(0, 0, 40, 80, 10);
+        
+        return get(0, 0, 80, 80);
+    },
     earth_player: function(){
         background(0, 0, 0, 0);
         
@@ -187,6 +249,27 @@ let imgs = {
         
         return get(0, 0, 80, 80);
     },
+    tile_block: function(){
+        background(0, 0);
+        
+        for (let i = 0; i < 4; i++){
+            var x = (i % 2) * 40;
+            var y = Math.floor(i / 2) * 40;
+            
+            fill(250-i*8);
+            rect(x, y, 40, 40);
+        }
+        
+        return get(0, 0, 80, 80);
+    },
+    spike_up_block: function(){},
+    spike_down_block: function(){},
+    spike_right_block: function(){},
+    spike_left_block: function(){},
+    crop_dry_block: function(){},
+    crop_mid_block: function(){},
+    crop_healthy_block: function(){},
+    brick_block: function(){},
     eyes: function(){
         background(0, 0, 0, 0);
         
@@ -215,7 +298,6 @@ function load(){
     if (curLoad >= Object.keys(imgs).length){
         scene = 'game';
     }
-    
     pushStyle();
         noFill();
         strokeWeight(10);
@@ -229,88 +311,110 @@ function load(){
     textAlign(CENTER, CENTER);
     text("Loading...", width / 2, 100);
 }
+    
 
 // BLOCKS \\
-function Block(x, y, type){
-    this.x = x;
-    this.y = y;
-    this.w = 80;
-    this.h = 80;
-    this.type = type;
-    
-    this.display = function() {
-        image(imgs[this.type+"_block"], this.x, this.y, 80, 80);
-    };
-}
+const Block = (function(){
+    function Block(x, y, type){
+        this.x = x;
+        this.y = y;
+        this.w = 80;
+        this.h = 80;
+        this.type = type;
+        
+        this.display = function() {
+            image(imgs[this.type+"_block"], this.x, this.y, 80, 80);
+            if (levels[level].scene === 'earth'){
+                fill(0, dist(this.x, this.y, player.x, player.y)-100);
+                rect(this.x, this.y, this.w, this.h);
+            }
+        };
+    }
+    return Block;
+})();
 
 // PLAYER \\
-function Player(x, y){
-    this.setX = x;
-    this.setY = y;
-    this.x = this.setX;
-    this.y = this.setY;
-    this.grav = 0.5,
-    this.falling = false;
-    this.w = 80;
-    this.h = 80;
-    this.v = {
-        x: 0,
-        y: 0,
-    };
-    this.draw = function(){
-        image(imgs[this.type+"_player"], this.x, this.y, this.w, this.h);
-        image(imgs.eyes, this.x, this.y);
-    },
-    this.move = function(){
-        // X Movement
-        if (keys.d || keys[RIGHT]){
-            this.v.x = 5;
-        } else if (keys.a || keys[LEFT]){ 
-            this.v.x = -5;
-        } else {
-            this.v.x = 0;
-        }
-        
-        this.x += this.v.x;
-        this.collide(this.v.x, 0);
-        
-        // Y Movement
-        if ((keys.w || keys[UP]) && !this.falling){
-            this.v.y = -10;
-            this.falling = true;
-        }
-        this.y += this.v.y;
-        this.v.y += this.grav;
-        this.collide(0, this.v.y);
-    };
-    this.collide = function(vx, vy){
-        for (var i = 0; i < blocks.length; i ++){
-            if (rectRect(this, blocks[i])){
-                if (vx > 0){
-                    this.v.x = 0;
-                    this.x = blocks[i].x - this.w;
-                }
-                if (vx < 0){
-                    this.v.x = 0;
-                    this.x = blocks[i].x + blocks[i].w;
-                }
-                if (vy > 0){
-                    this.v.y = 0;
-                    this.y = blocks[i].y - this.h;
-                    this.falling = false;
-                }
-                if (vy < 0){
-                    this.v.y = 0;
-                    this.y = blocks[i].y + blocks[i].h;
+const Player = (function(){
+    function Player(x, y){
+        this.setX = x;
+        this.setY = y;
+        this.x = this.setX;
+        this.y = this.setY;
+        this.grav = 0.5,
+        this.falling = false;
+        this.w = 80;
+        this.h = 80;
+        this.v = {
+            x: 0,
+            y: 0,
+        };
+        this.draw = function(){
+            image(imgs[this.type+"_player"], this.x, this.y, this.w, this.h);
+            image(imgs.eyes, this.x, this.y);
+        },
+        this.move = function(){
+            // X Movement
+            if (keys.d || keys[RIGHT]){
+                this.v.x = 5;
+            } else if (keys.a || keys[LEFT]){ 
+                this.v.x = -5;
+            } else {
+                this.v.x = 0;
+            }
+            
+            this.x = constrain(this.x, 0, levels[level].map[0].length * 80);
+            
+            if (this.x >= levels[level].map[0].length*80){
+                loadLevel(true);
+            }
+            
+            this.x += this.v.x;
+            this.collide(this.v.x, 0);
+            
+            // Y Movement
+            if ((keys.w || keys[UP]) && !this.falling){
+                this.v.y = -12;
+                this.falling = true;
+            }
+            this.y += this.v.y;
+            this.v.y += this.grav;
+            this.collide(0, this.v.y);
+            
+            if (keys.r){
+                this.x = this.setX;
+                this.y = this.setY;
+            }
+        };
+        this.collide = function(vx, vy){
+            for (var i = 0; i < blocks.length; i ++){
+                if (rectRect(this, blocks[i])){
+                    if (vx > 0){
+                        this.v.x = 0;
+                        this.x = blocks[i].x - this.w;
+                    }
+                    if (vx < 0){
+                        this.v.x = 0;
+                        this.x = blocks[i].x + blocks[i].w;
+                    }
+                    if (vy > 0){
+                        this.v.y = 0;
+                        this.y = blocks[i].y - this.h;
+                        this.falling = false;
+                    }
+                    if (vy < 0){
+                        this.v.y = 0;
+                        this.y = blocks[i].y + blocks[i].h;
+                    }
                 }
             }
-        }
-    };
-    this.run = function(){
-        this.draw();
-        this.move();
-    };
-}
+        };
+        this.run = function(){
+            this.draw();
+            this.move();
+        };
+    }
+    return Player;
+})();
 let player = new Player(0, 0);
 
 // LEVELS \\
@@ -344,7 +448,8 @@ function loadLevel(nxt){
                 case 'd':
                     blocks.push(new Block(X, Y, 'dirt'));
                 break;
-                
+                case '_':
+                    blocks.push(new Block(X, Y, 'tile'));
             }
         }
     }
@@ -353,22 +458,42 @@ loadLevel(false);
 
 // SCENES \\
 function game(){
-    background(255);
-    translate(cam.x, cam.y);
+    image(imgs[levels[level].scene+"_background"], 0, 0, width, height);
+    translate(-cam.x, -cam.y);
     
-    cam.x = constrain(cam.x, levels[level].map.length, 0);
-    cam.x = lerp(cam.x, player.x + width/2, cam.speed);
-    cam.y = lerp(cam.y, player.y - height/2, cam.speed);
+    cam.x = constrain(cam.x, 15, levels[level].map[0].length*80 - width);
+    cam.x = lerp(cam.x, player.x - width/2 + player.w/2, cam.speed);
+    cam.y = lerp(cam.y, player.y - height/2 + player.h/2, cam.speed);
     
     
     for (let b in blocks){
-        blocks[b].display();
+        if (blocks[b].x > cam.x-width){
+            blocks[b].display();
+        }
     }
     
-    
     player.run();
+    
+    resetMatrix();
+    
+    if (keys['=']){
+        dev = !dev;
+    }
+    if (dev){
+        stroke(0);
+        strokeWeight(1);
+        line(width/2, 0, width/2, height);
+        
+        line(0, height/2, width, height/2);
+        
+        fill(0);
+        textSize(30);
+        text("Cam: "+cam.x.toFixed(0)+","+cam.y.toFixed(0), 55, 10);
+    }
 }
 draw = function() {
     this[scene]();
 };
 
+var canvas = window[['document']][['getElementById']]('output-canvas');
+// canvas.focus();
